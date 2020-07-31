@@ -3,6 +3,11 @@
     "name": "Family Assistance",
     "slug": "FamilyAssistance",
     "privacy": "public",
+    "android": {
+      "package": "com.beersheva.B7",
+      "versionCode": 1
+
+    },
     "platforms": [
       "ios",
       "android",
@@ -10,11 +15,11 @@
     ],
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/family2_icon.png",
     "splash": {
-      "image": "./assets/family.png",
+      "image": "./assets/family2.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#e0aa00"
     },
     "updates": {
       "fallbackToCacheTimeout": 0
@@ -22,10 +27,10 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "ios": {
-      "supportsTablet": true
-    },
-    "android": {},
+    // "ios": {
+    //   "supportsTablet": true
+    // },
+    // "sdkVersion": "37.0.0"
     "sdkVersion": "37.0.0"
   }
 }

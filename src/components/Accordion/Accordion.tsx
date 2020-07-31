@@ -5,6 +5,7 @@ import List, { List as ListModel } from "./List";
 import { Suspense } from "react";
 import { Accordion } from "native-base";
 import { images } from "../ImagesClass";
+import moment from "moment";
 
 const Accordion2 = (props) => {
   var tasks = [];
@@ -58,9 +59,10 @@ const Accordion2 = (props) => {
     test: "test",
     markMission: props.markMission,
     taskId: props.morningTasks[0] ? props.morningTasks[0].taskId : "",
-    isDone: props.morningTasks[0] ? props.morningTasks[0].isDone : "",
+    //isDone: props.morningTasks[0].isDone
+    isDone: props.morningTasks[0] ? props.morningTasks[0].isDone : false,
   };
-  tasks.push(<List /* key={1} */ {...{ list }} />);
+  tasks.push(<List key={1} {...{ list }} />);
   var list: ListModel = {
     name: "משימות צהריים",
     items: props.noonTasks[0] ? props.noonTasks[0].tasks.slice() : [],
@@ -69,9 +71,9 @@ const Accordion2 = (props) => {
     test: "test",
     markMission: props.markMission,
     taskId: props.noonTasks[0] ? props.noonTasks[0].taskId : "",
-    isDone: props.noonTasks[0] ? props.noonTasks[0].isDone : "",
+    isDone: props.noonTasks[0] ? props.noonTasks[0].isDone : false,
   };
-  tasks.push(<List /* key={2} */ {...{ list }} />);
+  tasks.push(<List key={2} {...{ list }} />);
   var list: ListModel = {
     name: "משימות אחר הצהריים",
     items: props.afternoonTasks[0] ? props.afternoonTasks[0].tasks.slice() : [],
@@ -80,9 +82,9 @@ const Accordion2 = (props) => {
     test: "test",
     markMission: props.markMission,
     taskId: props.afternoonTasks[0] ? props.afternoonTasks[0].taskId : "",
-    isDone: props.afternoonTasks[0] ? props.afternoonTasks[0].isDone : "",
+    isDone: props.afternoonTasks[0] ? props.afternoonTasks[0].isDone : false,
   };
-  tasks.push(<List /* key={3} */ {...{ list }} />);
+  tasks.push(<List key={3} {...{ list }} />);
   var list: ListModel = {
     name: "משימות ערב",
     items: props.eveningTasks[0] ? props.eveningTasks[0].tasks.slice() : [],
@@ -91,39 +93,22 @@ const Accordion2 = (props) => {
     test: "test",
     markMission: props.markMission,
     taskId: props.eveningTasks[0] ? props.eveningTasks[0].taskId : "",
-    isDone: props.eveningTasks[0] ? props.eveningTasks[0].isDone : "",
+    isDone: props.eveningTasks[0] ? props.eveningTasks[0].isDone : false,
   };
-  tasks.push(<List /* key={4} */ {...{ list }} />);
+  tasks.push(<List key={4} {...{ list }} />);
   var list: ListModel = {
     name: "משימות מותאמות",
     items: props.customTasks[0] ? props.customTasks[0].tasks.slice() : [],
-    picture: "moon",
+    picture: "custom",
     test: "test",
     markMission: props.markMission,
     taskId: props.customTasks[0] ? props.customTasks[0].taskId : "",
-    isDone: props.customTasks[0] ? props.customTasks[0].isDone : "",
+    isDone: props.customTasks[0] ? props.customTasks[0].isDone : false,
 
   };
-  tasks.push(<List /* key={5} */ {...{ list }} />);
-  // for (let i = 0; i < allTasks.length; i++) {
-  //   // console.log('test');
-  //   const list: ListModel = {
-  //     name: allTasks[i]["title"],
-  //     items: morningItems.slice(),
-  //     picture: "sun",
-  //     test: "test",
-  //   };
+  tasks.push(<List key={5} {...{ list }} />);
 
-  //   tasks.push(<List key={allTasks[i]["id"]} {...{ list }} />);
-  //   let picPath = "../icons/" + "sun.jpg";
-  // }
-
-  let date = new Date();
-  let currentDate = date.getDate();
-  let currentMonth = date.getMonth() + 1;
-  let currentYear = date.getFullYear();
-  let fullDate = currentDate + "." + currentMonth + "." + currentYear;
-  // console.log("props: ", props);
+  let fullDate = moment(new Date()).format('DD/MM/YYYY');
 
   return (
     <View style={styles.container}>
@@ -141,14 +126,21 @@ export default Accordion2;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#8b96d9",
+    //backgroundColor: "#b5bef5",
     padding: 16,
   },
   header: {
     flexDirection: "row-reverse",
+
+    justifyContent: 'center'
+  },
+  headerTitle: {
+
   },
   title: {
-    fontSize: 25,
+    fontSize: 20,
     fontWeight: "bold",
+    color:'white'
+ 
   },
 });

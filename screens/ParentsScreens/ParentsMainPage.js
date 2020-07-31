@@ -1,28 +1,26 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
-  Text,
   View,
   ScrollView,
-  TextInput,
-  Alert,
-  Switch,
-  ProgressBarAndroid,
-  TouchableOpacity,
+  Text,
+  Image,
   ActivityIndicator,
+  ImageBackground,
+  Platform,
+  RefreshControl,
+  ProgressBarAndroid
 } from "react-native";
-import {
-  FormLabel,
-  FormInput,
-  FormValidationMessage,
-  Header,
-  Button,
-  ButtonGroup,
-} from "react-native-elements";
-import Accordion from "../../src/components/Accordion";
+//import { ProgressBar } from '@react-native-community/progress-bar-android';
+import { ProgressBar } from 'react-native-paper';
+import Accordion2 from "../../src/components/Accordion";
 import firebase from "../../config/config";
-import moment from "moment";
+import moment from "moment-timezone";
 import AwesomeAlert from "react-native-awesome-alerts";
+import * as Permissions from 'expo-permissions';
+import { Notifications } from 'expo';
+import Constants from 'expo-constants';
+//import * as firebasePush from 'firebase';
 
 export default class ParentsMainPage extends React.Component {
   constructor() {
@@ -38,8 +36,12 @@ export default class ParentsMainPage extends React.Component {
       numberOftasks: 1,
       numberOftasksDone: 1,
       showAlert: false,
+      loadingTasks: true,
+      refreshing: false
     };
     this.updateIndex = this.updateIndex.bind(this);
+
+
   }
 
   updateIndex(selectedIndex) {
@@ -48,8 +50,84 @@ export default class ParentsMainPage extends React.Component {
 
   async UNSAFE_componentWillMount() {
     // await this.getTasks();
-    await this.getCustomTasks();
+    //await this.getCustomTasks();
   }
+
+  async componentDidMount() {
+    this.registerForPushNotification();
+    await this.getCustomTasks();
+
+    const currentTime = moment(new Date());
+    console.log('currentTime: ', currentTime.format('HH:mm'));
+    const currentTimePlusFive = moment(new Date()).add(5, 'minutes');
+    console.log('currentTimePlusFive: ', currentTimePlusFive.format('HH:mm'));
+
+    const betweenTime = moment(new Date()).add(3, 'minutes');
+    console.log('betweenTime: ', betweenTime.format('HH:mm'));
+    console.log(betweenTime.isBetween(currentTime, currentTimePlusFive));
+    console.log('date string: ', moment(new Date()).set({ hour: parseInt('15'), minute: parseInt('00') }))
+
+    const currentDate = moment(new Date()).tz('Asia/Tel_Aviv');
+    console.log('currentDate for the query: ', currentDate.format('YYYY/MM/DD 00:01'));
+    console.log('currentDate for the query: ', new Date(currentDate.format('YYYY/MM/DD 00:01')));
+
+
+    // firebase.firestore().collection('tasks')
+    //   .where("date", ">=", new Date(currentTime.format("YYYY/MM/DD HH:mm")))
+    //   .get()
+    //   .then(snap => {
+    //     snap.forEach(doc => {
+    //       console.log(moment.tz(new Date(doc.data().date.seconds * 1000),"Asia/Tel_Aviv").format());
+    //     });
+    //   })
+    //   .catch(err => {
+    //     console.log('query Error: ', err)
+    //   })
+
+
+  }
+
+  registerForPushNotification = async () => {
+
+    const { status } = await Permissions.getAsync(Permissions.NOTIFICATIONS);
+    let finalStatus = status;
+    console.log('finalStatus ', finalStatus)
+
+    if (status !== 'granted') {
+      const { status } = await Permissions.askAsync(Permissions.NOTIFICATIONS);
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      return;
+    }
+    const token = await Notifications.getExpoPushTokenAsync();
+    console.log('token: ', token);
+    // .then(() => { console.log('token: ', token) })
+    // .catch((err) => { console.log('getExpoPushTokenAsync Error: ', err) })
+
+
+    if (Platform.OS === 'android') {
+      Notifications.createChannelAndroidAsync('tasks', {
+        name: 'tasks',
+        sound: true,
+        priority: 'max',
+        vibrate: [0, 250, 250, 250],
+      });
+      console.log('created android push channel');
+    }
+
+    const user = firebase.auth().currentUser.uid;
+
+    var userDoc = firebase.firestore().collection('users').doc(user)
+    if (token) {
+      var addTokenToUser = userDoc.set({
+        pushNotificationToken: token
+      }, { merge: true })
+        .then(() => { console.log('Added token to User') })
+        .catch((err) => { console.log('Adding Token Error ', err) });
+    }
+
+  };
 
   getCustomTasks = async () => {
     var user = firebase.auth().currentUser.uid;
@@ -157,7 +235,9 @@ export default class ParentsMainPage extends React.Component {
           } else {
             console.log("not same");
           }
+
         });
+        this.setState({ refreshing: false })
       })
       .catch((error) => {
         console.log("Error getting documents: ", error);
@@ -173,8 +253,10 @@ export default class ParentsMainPage extends React.Component {
       customTasks: customTasks,
       numberOftasks: numberOftasks,
       numberOftasksDone: numberOftasksDone,
+      loadingTasks: false
     });
   };
+
   showAlert = () => {
     this.setState({
       showAlert: true,
@@ -189,7 +271,7 @@ export default class ParentsMainPage extends React.Component {
 
   async markMission(task) {
     // this.showAlert()
-
+    console.log('task: ', task)
     var isDone;
     await firebase
       .firestore()
@@ -200,24 +282,38 @@ export default class ParentsMainPage extends React.Component {
         var data = doc.data();
         isDone = data.isDone;
       })
-      .catch((error) => {});
-    if (isDone) {
+      .catch((error) => {
+        console.log('GETTING TASKS ERROR ', error);
+      });
+    if (!isDone) {
       console.log(
         "this.state.numberOftasksDone+1: ",
         this.state.numberOftasksDone + 1
       );
       console.log("this.state.numberOftasks: ", this.state.numberOftasks);
-      if (
-        (this.state.numberOftasksDone + 1) / this.state.numberOftasks >=
-        0.6
-      ) {
+      var tasksPercentDone = (this.state.numberOftasksDone + 1) / (this.state.numberOftasks)
+      console.log('tasksPercentDone: ', tasksPercentDone)
+      var notAllTasks = (this.state.numberOftasksDone + 1) / (this.state.numberOftasks)
+      console.log('notAllTasks: ', notAllTasks)
+
+      if (tasksPercentDone >= 0.6 && notAllTasks != 1) {
         console.log("111");
         this.setState({
           numberOftasksDone: this.state.numberOftasksDone + 1,
           textForAlert: "אתה בדרך הנכונה, כל הכבוד!",
         });
         this.showAlert();
-      } else {
+      } else if (tasksPercentDone == 1) {
+        console.log("2222");
+        this.setState({
+          numberOftasksDone: this.state.numberOftasksDone + 1,
+          textForAlert: "סיימת את המשימות להיום, כל הכבוד!",
+        });
+        this.showAlert();
+      }
+
+      else {
+        console.log('4444')
         this.setState({ numberOftasksDone: this.state.numberOftasksDone + 1 });
       }
       console.log("count+1");
@@ -231,51 +327,89 @@ export default class ParentsMainPage extends React.Component {
       .doc(task)
       .update({
         isDone: !isDone,
-      });
+      })
+      .then(() => { console.log('updated') })
+      .catch(() => { console.log('update error ') })
+
+
   }
+
+  _onRefresh() {
+    this.setState({ refreshing: true });
+    this.getCustomTasks();
+  }
+
   render() {
+
     const { showAlert } = this.state;
 
     return (
       <View style={styles.container}>
-        <ScrollView>
-          <View style={styles.container}>
-            <ProgressBarAndroid
-              styleAttr="Horizontal"
-              indeterminate={false}
-              // progress={tasks / tasksDone}
-              progress={this.state.numberOftasksDone / this.state.numberOftasks}
+        <ImageBackground style={{ height: '100%', width: '100%' }} source={require('../../assets/new_background08.png')}>
+          <ScrollView refreshControl={
+            <RefreshControl
+              refreshing={this.state.refreshing}
+              onRefresh={this._onRefresh.bind(this)}
+              enabled
+              colors={['#e0aa00']}
             />
-            <Accordion
-              allTasks={this.state.allTasks}
-              morningTasks={this.state.morningTasks}
-              noonTasks={this.state.noonTasks}
-              afternoonTasks={this.state.afternoonTasks}
-              eveningTasks={this.state.eveningTasks}
-              customTasks={this.state.customTasks}
-              markMission={this.markMission.bind(this)}
-            />
-            <AwesomeAlert
-              show={showAlert}
-              showProgress={false}
-              title="כל הכבוד"
-              message="אתה בדרך הנכונה!"
-              closeOnTouchOutside={true}
-              closeOnHardwareBackPress={false}
-              showCancelButton={false}
-              showConfirmButton={true}
-              cancelText="No, cancel"
-              confirmText="סגור"
-              confirmButtonColor="#DD6B55"
-              onCancelPressed={() => {
-                this.hideAlert();
-              }}
-              onConfirmPressed={() => {
-                this.hideAlert();
-              }}
-            />
-          </View>
-        </ScrollView>
+          }>
+            <Image style={styles.image} source={require('../../src/images/30456.jpg')} />
+            <View style={styles.container}>
+              {this.state.loadingTasks
+                ? <ActivityIndicator size={40} color='#e0aa00' style={{ marginTop: 10 }} />
+                : <View style={styles.container}>
+
+                  {/* <ProgressBarAndroid
+                    styleAttr="Horizontal"
+                    indeterminate={false}
+                    // progress={tasks / tasksDone}
+
+                    progress={this.state.numberOftasksDone / this.state.numberOftasks}
+                  /> */}
+
+                  <ProgressBar
+                    progress={this.state.numberOftasksDone / this.state.numberOftasks}
+                    indeterminate={false}
+                    style={{height:20, marginVertical:10}}
+                    color={'#767ead'}
+                  />
+
+
+                  <Accordion2
+                    allTasks={this.state.allTasks}
+                    morningTasks={this.state.morningTasks}
+                    noonTasks={this.state.noonTasks}
+                    afternoonTasks={this.state.afternoonTasks}
+                    eveningTasks={this.state.eveningTasks}
+                    customTasks={this.state.customTasks}
+                    markMission={this.markMission.bind(this)}
+                  />
+                  <AwesomeAlert
+                    show={showAlert}
+                    showProgress={false}
+                    title="כל הכבוד"
+                    // message="אתה בדרך הנכונה!"
+                    message={this.state.textForAlert}
+                    closeOnTouchOutside={true}
+                    closeOnHardwareBackPress={false}
+                    showCancelButton={false}
+                    showConfirmButton={true}
+                    cancelText="No, cancel"
+                    confirmText="סגור"
+                    confirmButtonColor="#DD6B55"
+                    onCancelPressed={() => {
+                      this.hideAlert();
+                    }}
+                    onConfirmPressed={() => {
+                      this.hideAlert();
+                    }}
+                  />
+                </View>}
+            </View>
+
+          </ScrollView>
+        </ImageBackground>
       </View>
     );
   }
@@ -284,10 +418,10 @@ export default class ParentsMainPage extends React.Component {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#8b96d9",
+    //backgroundColor: "#b5bef5",
     // alignItems: 'center',
     justifyContent: "center",
-    paddingTop: 15,
+    //paddingTop: 5,
   },
   days: {
     flex: 1,
@@ -331,6 +465,11 @@ const styles = StyleSheet.create({
   },
   temp: {
     flex: 1,
-    textAlign: "left",
+    textAlign: "right",
+  },
+  image: {
+    width: '100%',
+    height: 220,
+
   },
 });

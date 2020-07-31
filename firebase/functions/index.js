@@ -1,17 +1,26 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const FieldValue = require('firebase-admin').firestore.FieldValue;
+const { Expo } = require('expo-server-sdk');
+var fetch = require('node-fetch')
+var moment = require('moment-timezone');
+const nodemailer = require('nodemailer');
+const cors = require('cors')({ origin: true });
+const RandExp = require('randexp');
+//const { doc } = require('prettier');
 
 admin.initializeApp({
     credential: admin.credential.applicationDefault(),
-    databaseURL: "https://family-assistance-f5ebb.firebaseio.com"
+    databaseURL: "https://family-assistance-f5ebb.firebaseio.com",
 });
+
 
 class UnauthenticatedError extends Error {
     constructor(message) {
         super(message);
         this.message = message;
         this.type = 'UnauthenticatedError';
+
     }
 }
 
@@ -31,14 +40,35 @@ class InvalidRoleError extends Error {
     }
 }
 
+class IDAlreadyInUseError extends Error {
+    constructor(message) {
+        super(message);
+        this.message = message;
+        this.type = 'InvalidIDError';
+    }
+}
+
 function roleIsValid(role) {
-    const validRoles = ['editor', 'parent', 'sw', 'kid ']; //To be adapted with your own list of roles
+    const validRoles = ['admin', 'editor', 'parent', 'sw', 'kid']; //To be adapted with your own list of roles
     return validRoles.includes(role);
 }
 
+
+const passRegEx = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[#$+=!*()@%&]).{8,10}$/g
+
+// const query = admin.firestore().collection('tasks').where('category', '==', 'morning');
+
+// const observer = query.onSnapshot(querySnapshot => {
+//     console.log(`Received query snapshot: ${querySnapshot.size}`);
+//     // ...
+// }, err => {
+//     console.log(`Encountered error: ${err}`);
+// });
+
+
+
 exports.getFamilyMembers = functions.https.onCall(async (data, context) => {
     let family = await admin.firestore().collection('families').doc(data).get();
-
 
 });
 
@@ -57,12 +87,238 @@ exports.deleteTask2 = functions.https.onCall(async (data, context) => {
     })
 });
 
+
+let transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+        user: 'familymailer123@gmail.com',
+        pass: 'shimon123'
+    }
+});
+
+/**
+* function to send email using given data. Data is formatted as two
+* objects:data.event and data.action
+*/
+exports.sendMail = functions.https.onCall(async (data, context) => {
+    console.log('test test')
+    console.log('data:', data)
+    //confirm user authentication. comment out if not using Firebase Auth.
+    if (!context.auth) {
+        throw new functions.https.HttpsError('failed-precondition', 'The function must be called ' +
+            'while authenticated.');
+    }
+    // const event = data.event;
+    // const action = data.action;
+
+    const mailOptions = {
+        from: 'myuser', // Something like: Jane Doe <janedoe@gmail.com>
+        to: data.swMailAddress,
+        subject: 'Report', // email subject
+        text: "מצ''ב דו''ח משימות שהזמנת.",
+        attachments: [
+            {
+                filename: 'Report.csv',
+                content: new Buffer(data.reportContent, 'utf-8')
+                // content: new Buffer('hello, world!\nkfir,nahmani\nshimon,emuna\n', 'utf-8')
+            }
+        ]
+    };
+    // returning result
+    return transporter.sendMail(mailOptions, (erro, info) => {
+        if (erro) {
+            return res.send(erro.toString());
+        }
+        return res.send('email sent successfully');
+    });
+});
+
+
+exports.generateReports = functions.https.onCall(async (data, context) => {
+    // console.log('dataaaa: ', data)
+    // var startDate = moment(data.startDate)
+    // var endDate = moment(data.endDate)
+    // console.log('startDate: ',startDate)
+    // console.log('endDate: ',endDate)
+
+    // var diff = endDate.diff(startDate,'days')
+    // console.log('diff: ',diff)
+    var family = data.selectedFamily
+    var startDate = data.startDate
+    var endDate = data.endDate;
+    var data = data.data
+    var tempDate = startDate
+    // console.log('tempDate222: ',tempDate)
+    // var data = this.state.data
+    // console.log('startDate: ', startDate)
+    // console.log('endDate: ', endDate)
+    var familyDetails = {};
+    for (let i = 0; i < data.length; i++) {
+        if (data[i].familyId == family) {
+            familyDetails = data[i]
+        }
+    }
+    // console.log('familyDetails: ', familyDetails)
+    var familyMembers = []
+    if (familyDetails.familyDetails && familyDetails.familyDetails.parents.length > 0) {
+        familyMembers = familyDetails.familyDetails.parents.slice()
+
+    }
+    if (familyDetails.familyDetails && familyDetails.familyDetails.kids.length > 0) {
+        familyMembers = familyDetails.familyDetails.kids.slice()
+
+    }
+    var diff = moment([endDate]).diff(moment([startDate]), 'years')
+    // console.log('diff: ', diff)
+    diff = parseInt(diff)
+    var reportContent = []
+    for (let i = 0; i < diff; i++) {
+        familyMembers.forEach(async (x) => {
+            var person = await firebase.firestore().collection('users').doc(x)
+            const swFamilies = await firebase
+                .firestore()
+                .collection("tasks")
+                .where("userId", "==", x)
+                .get()
+                .then((querySnapshot) => {
+                    querySnapshot.forEach((doc) => {
+                        let data = doc.data();
+                        var taskId = doc.id;
+                        var timeFromTheServer = moment(
+                            new Date(data.date.seconds * 1000)
+                        ).format("DD/MM/YYYY");
+
+                        if (timeFromTheServer == moment(tempDate).format('DD/MM/YYYY')) {
+                            console.log("same");
+                            reportContent.push({
+                                date: tempDate,
+                                name: person.firstName + ' ' + person.lastName,
+                                isDone: data.isDone,
+                                categoty: data.categoty,
+                                taskName: data.tasks
+                            })
+                            // console.log('reportContent2222: ',reportContent)
+
+                        } else {
+                            console.log("not same");
+                        }
+                    });
+                    // console.log("tempDate: ",moment(tempDate).format('DD/MM/YYYY'));
+
+                    tempDate = new Date(moment(tempDate, "DD/MM/YYYY HH:MM A").add(1, "days"));
+
+                })
+                .catch((error) => {
+                    console.log("Error getting documents: ", error);
+                });
+        })
+
+        // console.log("tempDate: ",moment(tempDate).format('DD/MM/YYYY'));
+        // tempDate = new Date(moment(tempDate, "DD/MM/YYYY HH:MM A").add(1, "days"));
+
+    }
+    const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+    const csvWriter = createCsvWriter({
+        path: '/tmp/temp.csv',
+        header: [
+            { id: 'name', title: 'Name' },
+            { id: 'surname', title: 'Surname' },
+            { id: 'age', title: 'Age' },
+            { id: 'gender', title: 'Gender' },
+        ]
+    });
+    const data2 = [
+        {
+            name: 'John',
+            surname: 'Snow',
+            age: 26,
+            gender: 'M'
+        }, {
+            name: 'Clair',
+            surname: 'White',
+            age: 33,
+            gender: 'F',
+        }, {
+            name: 'Fancy',
+            surname: 'Brown',
+            age: 78,
+            gender: 'F'
+        }
+    ];
+    setTimeout(() => {
+        csvWriter
+            .writeRecords(data2)
+            .then(() => console.log('The CSV file was written successfully'))
+            .catch((err) => console.log('csvWriter Error: ', err));
+    }, 1000)
+
+});
+
+exports.addRoutineTasks = functions.https.onCall(async (data, context) => {
+    console.log('addRoutineTasks')
+    let routineTasksColl = admin.firestore().collection('RoutineTasks');
+    if (data.newMorningTask) {
+        var arrUnion = routineTasksColl.doc('morning').update({
+            tasks: admin.firestore.FieldValue.arrayUnion(data.newMorningTask)
+        });
+    }
+    if (data.newNoonTask) {
+        var arrUnion = routineTasksColl.doc('noon').update({
+            tasks: admin.firestore.FieldValue.arrayUnion(data.newNoonTask)
+        });
+    }
+    if (data.newAfternoonTask) {
+        var arrUnion = routineTasksColl.doc('afterNoon').update({
+            tasks: admin.firestore.FieldValue.arrayUnion(data.newAfternoonTask)
+        });
+    }
+    if (data.newEveningTask) {
+        var arrUnion = routineTasksColl.doc('evening').update({
+            tasks: admin.firestore.FieldValue.arrayUnion(data.newEveningTask)
+        });
+    }
+    // routineTasksDoc.update({
+    //     tasks: FieldValue.arrayRemove(data.taskToDelete)
+    // })
+});
+
 exports.createUser = functions.https.onCall(async (data, context) => {
     try {
         //Checking that the user calling the Cloud Function is authenticated
         if (!context.auth) {
-            throw new UnauthenticatedError('The user is not authenticated. Only authenticated Admin users can create new users.');
+            throw new UnauthenticatedError('The user is not authenticated. Only authenticated SW users can create new users.');
         }
+
+        // let userID = data.id;
+        // let userEmail = {
+        //     email: data.email
+        // };
+
+        // await admin.firestore().collection('usersIDs').doc(userID).set(userEmail);
+
+        // await admin.firestore().collection('usersIDs').doc(data.id).get()
+        //     .then(async (doc) => {
+        //         if (!doc.exists) {
+        //             await admin.firestore().collection('usersIDs').doc(data.id).set({
+        //                 email: data.id
+        //             })
+        //                 .then(() => {
+        //                     console.log('id-email doc added successfuly');
+        //                 })
+        //                 .catch((err) => {
+        //                     console.log('id-email doc writing Error: ', err);
+        //                 })
+        //         } else {
+        //             throw new IDAlreadyInUseError('This ID number already signed');
+        //         }
+        //     })
+        //     .catch((err) => {
+        //         console.log('error adding ID number - email document: ', err);
+        //         throw err;
+        //     })
+
 
         //Checking that the user calling the Cloud Function is an Admin user
         const callerUid = context.auth.uid;  //uid of the user calling the Cloud Function
@@ -91,14 +347,20 @@ exports.createUser = functions.https.onCall(async (data, context) => {
 
         console.log(75);
 
+        const pass = new RandExp(passRegEx);
+
         const newUser = {
-            email: data.email,
+            //email: data.email,
+            uid: data.id,
+            email: `${data.id}@gmail.com`,
             emailVerified: false,
+            phoneNumber: `+972${data.phone}`,
             password: data.id,
             displayName: data.firstName + ' ' + data.lastName,
             disabled: false
         }
-        console.log(84);
+
+        console.log('newUser: ', newUser);
 
         const userRecord = await admin
             .auth()
@@ -126,6 +388,7 @@ exports.createUser = functions.https.onCall(async (data, context) => {
                 })
         }
 
+
         await admin.firestore().collection("users").doc(userId).set(data);
 
         await userCreationRequestRef.update({ status: 'Treated' });
@@ -137,7 +400,7 @@ exports.createUser = functions.https.onCall(async (data, context) => {
 
         if (error.type === 'UnauthenticatedError') {
             throw new functions.https.HttpsError('unauthenticated', error.message);
-        } else if (error.type === 'NotAnAdminError' || error.type === 'InvalidRoleError') {
+        } else if (error.type === 'NotAnAdminError' || error.type === 'InvalidRoleError' || error.type === 'InvalidIDError') {
             throw new functions.https.HttpsError('failed-precondition', error.message);
         } else {
             throw new functions.https.HttpsError('internal', error.message);
@@ -146,7 +409,6 @@ exports.createUser = functions.https.onCall(async (data, context) => {
     }
 
 });
-
 
 exports.createFamily = functions.https.onCall(async (data, context) => {
     try {
@@ -182,7 +444,8 @@ exports.createFamily = functions.https.onCall(async (data, context) => {
         }
 
         data['swInCharge'] = callerUid;
-        data['status'] = 'active';
+        // data['status'] = 'active';
+        data['status'] = true;
         data['parents'] = [];
         data['kids'] = [];
 
@@ -204,8 +467,425 @@ exports.createFamily = functions.https.onCall(async (data, context) => {
             throw new functions.https.HttpsError('internal', error.message);
         }
     }
-})
+});
 
+
+exports.signinUserEmail = functions.https.onCall(async (data, context) => {
+    //admin.firestore().collection('users').where('id')
+    const userEmail = await admin.firestore().collection('usersIDs').doc(data).get()
+        .then((doc) => {
+            if (!doc.exists) {
+                console.log('Wrong ID!');
+                throw new functions.https.HttpsError('internal', 'ID Does Not Exist!');
+            } else {
+                console.log('doc.data.email ', doc.data().email)
+                return doc.data().email;
+            }
+        })
+        .catch((err) => {
+            console.log("Error getting document ", err);
+            if (err.message === 'ID Does Not Exist!') {
+                throw err;
+            }
+
+
+        })
+
+
+    return userEmail;
+
+
+
+
+    // admin.auth().createCustomToken(data.idNumber)
+    //     .then(function (customToken) {
+    //         // Send token back to client
+    //     })
+    //     .catch(function (error) {
+    //         console.log('Error creating custom token:', error);
+    //         throw new functions.https.HttpsError('internal', error.message);
+    //     });
+
+});
+
+
+exports.scheduledFunction = functions.pubsub.schedule('every 5 minutes').onRun((context) => {
+    console.log('This will be run every 5 minutes!', context);
+    //sendPushNotification2();
+    return null;
+});
+
+
+sendPushNotification2 = async () => {
+    let expo = new Expo();
+
+    let morningTasks = admin
+        .firestore()
+        .collection("RoutineTasks")
+        .doc("morning");
+
+    let getDoc = morningTasks
+        .get()
+        .then((doc) => {
+            if (!doc.exists) {
+                console.log("No such document!");
+            } else {
+                let allData = doc.data();
+                morningFirstAlert = allData.beforeAlertTime
+                morningSecondsAlert = allData.afterAlertTime
+
+            }
+        })
+        .catch((err) => {
+            console.log("Error getting document", err);
+        });
+
+    let messages = [];
+
+    const currentDate = moment(new Date()).tz('Asia/Tel_Aviv');
+    //const currentDatePlusDay = moment(new Date()).tz('Asia/Tel_Aviv').add(1,'days');
+    console.log('currentDate for the query: ', new Date(currentDate.format('YYYY/MM/DD 00:01')));
+    // console.log('currentDatePlusDay for the query: ', new Date(currentDate.format('YYYY/MM/DD 23:59')));
+
+    const allTasks = await admin
+        .firestore()
+        .collection("tasks")
+        .where("date", ">=", new Date('2020/07/28 00:01'))
+        .where("date", "<=", new Date('2020/07/29 00:01'))
+        .get()
+        .then((querySnapshot) => {
+            querySnapshot.forEach(async (doc) => {
+                if (!doc.exists) {
+                    console.log("No such document!!!!!!");
+                } else {
+                    let allData = doc.data();
+                    // console.log('category: ', allData.category)
+                    if (allData.category == 'morning') {
+                        const taskDateAndTime = moment(allData.date.seconds * 1000).tz('Asia/Tel_Aviv');
+                        const taskTime = moment(new Date()).tz('Asia/Tel_Aviv').set({ hour: parseInt(allData.time.slice(0, 2)), minute: parseInt(allData.time.slice(3, 5))});
+                        const taskDateOnlyDate = moment(allData.date.seconds * 1000).tz('Asia/Tel_Aviv').format('DD/MM/YYYY');
+                        const currentDateOnlyDate = moment(new Date()).tz('Asia/Tel_Aviv');
+                        const currentTimeOnlyTime = moment(new Date()).tz('Asia/Tel_Aviv');
+                        const currentTimeOnlyTimePlusFive = moment(new Date()).tz('Asia/Tel_Aviv').add(5, 'minutes');
+
+                        // await admin.firestore().collection('users').doc(allData.userId)
+                        //     .get()
+                        //     .then((doc) => {
+                        //         if (!doc.exists) {
+                        //             console.log("error on get user for pushToken: No such document!");
+                        //         } else {
+                        //             const token = doc.data().pushNotificationToken;
+                        //             console.log('token: ', token);
+                        //         }
+                        //     })
+                        //     .catch((err) => {
+                        //         console.log('error on getting pushToken: ', err);
+                        //     });
+
+                        console.log('taskDate: ', taskDateAndTime.format());
+                        console.log('taskDateOnlyDate ', taskDateOnlyDate)
+                        console.log('currentDateOnlyDate', currentDateOnlyDate.format('DD/MM/YYYY HH:mm'))
+                        // console.log('morningFirstAlert ', morningFirstAlert);
+                        // console.log('morningSecondsAlert ', morningSecondsAlert);
+                        console.log('taskTime: ', taskTime.format('HH:mm'));
+                        console.log('currentTimeOnlyTime: ', currentTimeOnlyTime.format('HH:mm'));
+                        console.log('currentTimeOnlyTime: ', currentTimeOnlyTimePlusFive.format('HH:mm'));
+
+                        //console.log('currentTimeOnlyTime plus 5: ', currentTimeOnlyTime.add(5, "minutes").format('HH:mm'));
+
+                        if (taskDateOnlyDate == currentDateOnlyDate.format('DD/MM/YYYY')) {
+                            console.log('same date');
+                            if (taskTime.isBetween(currentTimeOnlyTime, currentTimeOnlyTimePlusFive)) {
+
+                                console.log('needs to send push notification - alert number 1');
+
+                                messages.push({
+                                    to: 'ExponentPushToken[EUmyKELbBeaN15Z2BC8LwE]',
+                                    sound: 'default',
+                                    title: 'משימות בוקר',
+                                    body: allData.tasks.join(', ').toString(),
+                                    channelId: 'tasks'
+                                });
+
+                                console.log('notification pushed to messages array');
+                            }
+                        }
+                    }
+                }
+            })
+        }
+        )
+        .catch((err) => (console.log('tasks error ', err)));
+
+
+    let chunks = expo.chunkPushNotifications(messages);
+    console.log('chunks made');
+
+    let tickets = [];
+    (async () => {
+        console.log('start "for" loop of chunks')
+        for (let chunk of chunks) {
+            try {
+                let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+                console.log('chunk sent')
+                console.log('ticketChunk ', ticketChunk);
+                tickets.push(...ticketChunk);
+                // NOTE: If a ticket contains an error code in ticket.details.error, you
+                // must handle it appropriately. The error codes are listed in the Expo
+                // documentation:
+                // https://docs.expo.io/versions/latest/guides/push-notifications#response-format
+            } catch (error) {
+                console.log(error);
+            }
+        }
+        console.log('end for loop');
+    })();
+
+}
+
+
+sendPushNotification = async () => {
+    console.log('sendPushNotification is running')
+    var morningFirstAlert = 1
+    var morningSecondsAlert = 1
+    var noonFirstAlert = 1
+    var noonSecondsAlert = 1
+    var afternoonFirstAlert = 1
+    var afternoonSecondsAlert = 1
+    var eveningFirstAlert = 1
+    var eveningSecondsAlert = 1
+
+    var currentDate2 = new Date();
+
+    let morningTasks = admin
+        .firestore()
+        .collection("RoutineTasks")
+        .doc("morning");
+
+    let getDoc = morningTasks
+        .get()
+        .then((doc) => {
+            if (!doc.exists) {
+                console.log("No such document!");
+            } else {
+                let allData = doc.data();
+                morningFirstAlert = allData.beforeAlertTime
+                morningSecondsAlert = allData.afterAlertTime
+
+            }
+        })
+        .catch((err) => {
+            console.log("Error getting document", err);
+        });
+
+
+    let noonTasks2 = admin
+        .firestore()
+        .collection("RoutineTasks")
+        .doc("noon");
+
+    let getDoc22 = noonTasks2
+        .get()
+        .then((doc) => {
+            if (!doc.exists) {
+                console.log("No such document!");
+            } else {
+                let allData = doc.data();
+                noonFirstAlert = allData.beforeAlertTime
+                noonSecondsAlert = allData.afterAlertTime
+            }
+        })
+        .catch((err) => {
+            console.log("Error getting document", err);
+        });
+
+
+
+
+    let afternoonTasks = admin
+        .firestore()
+        .collection("RoutineTasks")
+        .doc("afterNoon");
+
+    let getDoc3 = afternoonTasks
+        .get()
+        .then((doc) => {
+            if (!doc.exists) {
+                console.log("No such document!");
+            } else {
+                let allData = doc.data();
+                afternoonFirstAlert = allData.beforeAlertTime
+                afternoonSecondsAlert = allData.afterAlertTime
+            }
+        })
+        .catch((err) => {
+            console.log("Error getting document", err);
+        });
+
+
+    let eveningTasks = admin
+        .firestore()
+        .collection("RoutineTasks")
+        .doc("evening");
+
+    let getDoc4 = eveningTasks
+        .get()
+        .then((doc) => {
+            if (!doc.exists) {
+                console.log("No such document!");
+            } else {
+                let allData = doc.data();
+                eveningFirstAlert = allData.beforeAlertTime
+                eveningSecondsAlert = allData.afterAlertTime
+            }
+        })
+        .catch((err) => {
+            console.log("Error getting document", err);
+        });
+
+
+
+
+
+    const currentDate = moment(new Date());
+    var add30Minutes = moment(new Date()).add(30, "minutes")
+    add30Minutes = moment(add30Minutes).format('DD/MM/YYYY HH:mm A')
+    console.log('add30Minutes ', add30Minutes);
+
+    const allTasks = await admin
+        .firestore()
+        .collection("tasks")
+        .get()
+        .then((querySnapshot) => {
+            querySnapshot.forEach(async (doc) => {
+                if (!doc.exists) {
+                    console.log("No such document!!!!!!");
+                } else {
+                    let allData = doc.data();
+                    // console.log('category: ', allData.category)
+                    if (allData.category == 'morning') {
+
+                        const taskDate = moment(allData.date.seconds * 1000).format('DD/MM/YYYY HH:mm');
+                        const taskDateOnlyDate = moment(allData.date.seconds * 1000).format('DD/MM/YYYY');
+                        const currentDateOnlyDate = moment(new Date()).format('DD/MM/YYYY');
+                        console.log('taskDateOnlyDate ', taskDateOnlyDate)
+                        console.log('currentDateOnlyDate', currentDateOnlyDate)
+                        console.log('morningFirstAlert ', morningFirstAlert);
+                        console.log('morningSecondsAlert ', morningSecondsAlert);
+                        if (taskDateOnlyDate == currentDateOnlyDate) {
+                            console.log('same date')
+                            const timeOfAlert = currentDate.add(morningFirstAlert + 5, "minutes").format('DD/MM/YYYY HH:mm')
+                            const timeOfAlert2 = currentDate.add(morningFirstAlert, "minutes").format('DD/MM/YYYY HH:mm')
+                            const timeOfAlert3 = currentDate.add(morningSecondsAlert + 5, "minutes").format('DD/MM/YYYY HH:mm')
+                            const timeOfAlert4 = currentDate.add(morningSecondsAlert, "minutes").format('DD/MM/YYYY HH:mm')
+
+                            console.log('currentDate ', currentDate)
+                            console.log('taskDate ', taskDate)
+                            console.log('timeOfAlert ', timeOfAlert)
+                            console.log('timeOfAlert2 ', timeOfAlert2)
+                            console.log('timeOfAlert3 ', timeOfAlert3)
+                            console.log('timeOfAlert4 ', timeOfAlert4)
+                            console.log('morningFirstAlert ', morningFirstAlert)
+                            console.log('morningSecondsAlert ', morningSecondsAlert)
+                            //if (moment(taskDate).isAfter(timeOfAlert2) && moment(taskDate).isBefore(timeOfAlert)) {
+                            console.log('needs to send push notification - alert number 1')
+                            const message = {
+                                to: 'ExponentPushToken[EUmyKELbBeaN15Z2BC8LwE]',
+                                sound: 'default',
+                                title: 'משימה מתקרבת',
+                                body: 'התראה מספר 1',
+                                data: { data: 'goes here' },
+                                _displayInForeground: true,
+                            };
+                            await fetch('https://exp.host/--/api/v2/push/send', {
+                                method: 'POST',
+                                headers: {
+                                    Accept: 'application/json',
+                                    'Accept-encoding': 'gzip, deflate',
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify(message)
+
+                            }).then(res => {
+                                console.log('res: ', res)
+                            });
+                            //}
+                            // else if (moment(taskDate).isAfter(timeOfAlert4) && moment(taskDate).isBefore(timeOfAlert3)) {
+                            //     console.log('needs to send push notification - alert number 2')
+                            //     const message = {
+                            //         to: 'ExponentPushToken[EUmyKELbBeaN15Z2BC8LwE]',
+                            //         sound: 'default',
+                            //         title: 'משימה ממש קרובה',
+                            //         body: 'התראה מספר 2',
+                            //         data: { data: 'goes here' },
+                            //         _displayInForeground: true,
+                            //     };
+                            //     await fetch('https://exp.host/--/api/v2/push/send', {
+                            //         method: 'POST',
+                            //         headers: {
+                            //             Accept: 'application/json',
+                            //             'Accept-encoding': 'gzip, deflate',
+                            //             'Content-Type': 'application/json',
+                            //         },
+                            //         body: JSON.stringify(message)
+
+                            //     }).then(res => {
+                            //         console.log('res: ', res)
+                            //     });
+                            // }
+                        }
+                    }
+                }
+            });
+        })
+        .catch((err) => { console.log('tasks ', err) })
+
+
+
+    const allTasks2 = await admin.firestore().collection('tasks').get()
+    allTasks2.docs.map(doc => doc.data())
+    const allUsers = admin.firestore().collection('users').get()
+    // console.log('alltasks: ', allTasks)
+    // console.log('allUsers: ', allUsers)
+    // console.log('two seconds')
+
+
+
+
+
+
+    // const message = {
+    //     to: 'ExponentPushToken[V9Tum4EXGyriFFECBJ5iYO]',
+    //     sound: 'default',
+    //     title: 'Original Title',
+    //     body: 'And here is the body!',
+    //     data: { data: 'goes here' },
+    //     _displayInForeground: true,
+    //   };
+    //  await fetch('https://exp.host/--/api/v2/push/send', {
+    //             method: 'POST',
+    //             headers: {
+    //                 Accept: 'application/json',
+    //                 'Accept-encoding': 'gzip, deflate',
+    //                 'Content-Type': 'application/json',
+    //             },
+    //             body: JSON.stringify(message)
+
+    //         }).then(res=>{
+    //             console.log('res: ',res)
+    //         });
+
+
+}
+
+// setInterval(() => {
+//     console.log('setInterval')
+//     sendPushNotification2()
+// }, 100000)
+
+// setTimeout(() => {
+//     sendPushNotification2();
+// }, 3000)
 
 
 

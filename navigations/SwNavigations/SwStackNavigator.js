@@ -1,5 +1,5 @@
 import React from 'react';
-
+import { Text, View } from 'react-native';
 import { createStackNavigator } from 'react-navigation-stack';
 import Main from '../../screens/swScreens/MainPage';
 import Icon from '@expo/vector-icons/Ionicons';
@@ -13,35 +13,42 @@ import AddNewTask from '../../screens/swScreens/AddNewTask';
 
 const SwStackNavigator = createStackNavigator({
   Main: Main,
-  AddNewTask:AddNewTask,
-  AddNewFamily:AddNewFamily,
-  Tasks2:Tasks2,
-  WatchFamilies:WatchFamilies,
-  Reports:Reports
+  AddNewTask: AddNewTask,
+  AddNewFamily: AddNewFamily,
+  Tasks2: Tasks2,
+  WatchFamilies: WatchFamilies,
+  //Reports: Reports
 },
   {
-    
     defaultNavigationOptions: ({ navigation }) => {
       return {
-        headerLeft: (
+        headerRight: (
           <Icon style={{ padding: 10 }}
             onPress={() => navigation.openDrawer()}
             name="md-menu"
-            size={30} />
+            size={30}
+            color='white' />
         ),
-        headerRight: (
-          <Icon style={{ padding: 10 }}
-            name="md-exit"
-            onPress={() => {
-              firebase.auth().signOut();
-              navigation.navigate('Welcome');
-
-            }
-            }
-            size={30} />
-        )
+        headerTintColor:'white',
+        // headerLeft: (
+        //   <Icon style={{ padding: 10 }}
+        //     name="md-exit"
+        //     onPress={() => {
+        //       firebase.auth().signOut();
+        //       navigation.navigate('Welcome');
+        //     }
+        //     }
+        //     size={30}
+        //     color='white' />
+        // ),
+        headerStyle: {
+          backgroundColor: '#e0aa00'
+        }
       }
     }
+  },
+  {
+    headerLayoutPreset:'center'
   }
 )
 

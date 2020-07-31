@@ -3,90 +3,147 @@ import {
   StyleSheet,
   Text,
   View,
+  Button,
   TextInput,
   TouchableOpacity,
+  Image,
   TouchableHighlightBase
 } from 'react-native';
 import firebase from '../../config/config';
 import Spinner from '../components/Spinner';
+import { auth } from 'firebase';
+import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 
 export default class Form extends Component {
 
   constructor(props) {
     super(props);
+    this.ref = null;
     this.state = {
       id: '',
       password: '',
       errorMessage: '',
-      loading: false
+      loading: false,
+      recaptchaVerifier: null,
+      verificationId: '',
+      confirm: null,
+      verificationCode: ''
     };
 
 
-    var that = this;
-    firebase.auth().onAuthStateChanged(function (user) {
-      try {
-        user = firebase.auth().currentUser;
-        if (user) {
-          userUid = user.uid
-
-
-          // console.log("user22: ",user);
-          firebase.firestore().collection('users').doc(userUid).get()
-            .then(doc => {
-              // console.log("doc: ", doc)
-              console.log("doc role: ", doc._document.proto.fields.role.stringValue)
-              let role = doc._document.proto.fields.role.stringValue;
-              console.log('role: ', role)
-              if (role == 'sw') {
-                that.props.navigation.navigate('SwDashboard');
-              }
-              else if (role == 'parent') {
-                that.props.navigation.navigate('ParentsDashboard');
-              }
-              else if (role == 'child') {
-                that.props.navigation.navigate('KidsDashboard');
-              } else {
-                that.props.navigation.navigate('Welcome');
-              }
-            })
-        } else {
-          that.props.navigation.navigate('Welcome');
-        }
-        // if (userUid) {
-        //   that.props.navigation.navigate('SwDashboard');
-        // } else {
-        // }
-      } catch {
-        console.log('error get current user');
-      }
-    });
+    // var that = this;
+    // firebase.auth().onAuthStateChanged(function (user) {
+    //   try {
+    //     let sessionTimeout;
+    //     user = firebase.auth().currentUser;
+    //     if (user) {
+    //       user.getIdTokenResult().then((idTokenResult) => {
+    //         const authTime = idTokenResult.claims.auth_time * 1000;
+    //         console.log('authTime: ', authTime);
+    //         const sessionDuration = 1000 * 60 * 100;
+    //         const millisecondsUntilExpiration = sessionDuration - (Date.now() - authTime);
+    //         sessionTimeout = setTimeout(() => firebase.auth().signOut(), millisecondsUntilExpiration)
+    //       })
+    //       userUid = user.uid
+    //       firebase.firestore().collection('users').doc(userUid).get()
+    //         .then(doc => {
+    //           // console.log("doc: ", doc)
+    //           console.log("doc role: ", doc._document.proto.fields.role.stringValue)
+    //           let role = doc._document.proto.fields.role.stringValue;
+    //           console.log('role: ', role)
+    //           if (role == 'sw') {
+    //             that.props.navigation.navigate('SwDashboard');
+    //           }
+    //           else if (role == 'parent') {
+    //             that.props.navigation.navigate('ParentsDashboard');
+    //           }
+    //           else if (role == 'kid') {
+    //             that.props.navigation.navigate('KidsDashboard');
+    //           } else {
+    //             that.setState({ errorMessage: 'אירעה שגיאה', loading: false })
+    //             that.props.navigation.navigate('Welcome');
+    //           }
+    //         })
+    //         .catch((err) => {
+    //           console.log('Form ', err);
+    //           that.setState({ errorMessage: 'אירעה שגיאה', loading: false })
+    //         })
+    //     } else {
+    //       sessionTimeout && clearTimeout(sessionTimeout);
+    //       sessionTimeout = null;
+    //       that.props.navigation.navigate('Welcome');
+    //     }
+    //   } catch {
+    //     console.log('error get current user');
+    //   }
+    // });
   }
 
-  onButtonPress() {
-    //this.props.navigation.navigate('SwDashboard');
+  firebaseConfig = firebase.options;
 
-    // const { id, password } = this.state;
-    // this.setState({ errorMessage: '', loading: true });
+  async signInWithPhoneNumber(phoneNumber) {
+    try {
+      const phoneProvider = new auth.PhoneAuthProvider();
+      const verificationId = await phoneProvider.verifyPhoneNumber(
+        phoneNumber,
+        this.ref
+      );
+      this.setState({ verificationId: verificationId });
+      console.log('verificationId: ',this.state.verificationId)
+      //const confirmation = await firebase.auth().sign.signInWithPhoneNumber(phoneNumber);
+      //this.setState({ confirm: confirmation });
+    } catch (err) {
+      console.log('error signInWithPhoneNumber: ', err);
+      this.setState({ errorMessage: 'אירעה שגיאה',loading:false });
+      this.props.navigation.navigate('Welcome');
+    }
+  }
+
+  async confirmCode() {
+    try {
+      const credential = auth.PhoneAuthProvider.credential(
+        this.state.verificationId,
+        this.state.verificationCode
+      );
+      await firebase.auth().signInWithCredential(credential);
+    } catch (err) {
+      console.log('code verification error: ', err);
+    }
+  }
+
+
+  onButtonPress() {
 
     const { id, password } = this.state;
     this.setState({ errorMessage: '', loading: true });
 
-    firebase.auth().signInWithEmailAndPassword(id, password)
-      .catch(this.onLoginFail.bind(this));
+    // this.signInWithPhoneNumber('+972542311506');
 
-    // var users = firebase.firestore().collection('users').doc('LruTTvuWdqWd6RqUs9JN1tPjAcJ2');
-    // users.get().then(function (doc) {
-    //   if (doc.exists) {
-    //     console.log("Document data:", doc.data());
-    //   } else {
-    //     // doc.data() will be undefined in this case
-    //     console.log("No such document!");
-    //   }
-    // }).catch(function (error) {
-    //   console.log("Error getting document:", error);
-    // });
+    firebase.auth().signInWithEmailAndPassword(`${id}@gmail.com`, password)
+      .then(() => {
+        console.log('phoneNumber: ', firebase.auth().currentUser.phoneNumber);
+        //this.signInWithPhoneNumber('+97254-231-1506');
 
-    //this.props.navigation.navigate('SwDashboard');
+      })
+      .catch((err) => {
+        this.onLoginFail();
+      });
+
+    const userEmail = firebase.functions().httpsCallable('signinUserEmail');
+
+    // userEmail(id)
+    //   .then((resp) => {
+    //     console.log(resp);
+    //     firebase.auth().signInWithEmailAndPassword(resp.data, password)
+    //       .catch((err) => {
+    //         console.log('86');
+    //         this.onLoginFail();
+    //       });
+    //   })
+    //   .catch((err) => {
+    //     console.log('userEmail Error ', err);
+    //     this.onLoginFail();
+    //   })
   }
 
   onLoginFail() {
@@ -110,57 +167,67 @@ export default class Form extends Component {
   render() {
     return (
       <View style={styles.container}>
-        <TextInput onChangeText={(id) => this.setState({ id })} value={this.state.id} style={styles.inputBox}
-          underlineColorAndroid='rgba(0,0,0,0)'
+        <FirebaseRecaptchaVerifierModal
+          ref={ref => this.ref = ref}
+          firebaseConfig={this.firebaseConfig}
+          title='אני לא רובוט'
+          cancelLabel='ביטול'
+          in
+        />
+        <TextInput
+          onChangeText={(id) => this.setState({ id })}
+          value={this.state.id}
+          style={styles.inputBox}
+          underlineColorAndroid='transparent'
           placeholder="תעודת זהות"
           placeholderTextColor="#ffffff"
-          selectionColor="#fff"
-          keyboardType="email-address"
+          selectionColor="gray"
+          keyboardType='numeric'
           onSubmitEditing={() => this.password.focus()}
+
         />
 
-        <TextInput onChangeText={(password) => this.setState({ password })} value={this.state.password} style={styles.inputBox}
-          underlineColorAndroid='rgba(0,0,0,0)'
+        <TextInput
+          onChangeText={(password) => this.setState({ password })}
+          value={this.state.password}
+          style={styles.inputBox}
+          underlineColorAndroid='transparent'
           placeholder='סיסמה'
-          selectionColor="#fff"
+          selectionColor="gray"
           secureTextEntry
-          placeholderTextColor="#ffffff"
+          placeholderTextColor="white"
           ref={(input) => this.password = input}
         />
 
         {this.state.errorMessage ? <Text style={styles.errorMessage}> {this.state.errorMessage} </Text> : null}
 
+        {this.state.verificationId
+          ?
+          <View>
+
+            <TextInput
+              onChangeText={(verificationCode) => this.setState({ verificationCode })}
+              value={this.state.verificationCode}
+              style={styles.inputBox}
+              underlineColorAndroid='transparent'
+              placeholder='קוד אימות'
+              selectionColor="gray"
+              secureTextEntry
+              placeholderTextColor="white"
+            />
+            <Button title="Confirm Code" onPress={() => this.confirmCode()} />
+          </View>
+          : null
+        }
 
         <View>
           {this.renderButton()}
         </View>
 
-        {/* <TouchableOpacity onPress={() => this.onButtonPress()} style={styles.button}>
-          <Text style={styles.buttonText}>התחברות</Text>
-        </TouchableOpacity> */}
       </View>
     )
   }
 
-  // loginUser = async (id, password) => {
-
-  //   if (id != '' && password != '') {
-  //     try {
-  //       let user = await firebase.auth().signInWithEmailAndPassword(id, password);
-  //       this.props.navigation.navigate('ParentsDashboard');
-  //     } catch (error) {
-  //       this.addError();
-  //       console.log(error);
-  //     }
-  //   }
-  //   else {
-  //     this.addError();
-  //   }
-  // }
-
-  // addError = () => {
-  //   this.setState({ errorMessage: 'שם משתמש או סיסמה שגויים' });
-  // }
 }
 
 const styles = StyleSheet.create({
@@ -173,8 +240,8 @@ const styles = StyleSheet.create({
   inputBox: {
     width: 300,
     height: 40,
-    backgroundColor: 'rgba(255, 255,255,0.2)',
-    borderRadius: 22,
+    backgroundColor: 'lightgray',
+    borderRadius: 20,
     paddingHorizontal: 16,
     fontSize: 20,
     color: '#ffffff',
@@ -183,10 +250,12 @@ const styles = StyleSheet.create({
   },
   button: {
     width: 200,
-    backgroundColor: '#1c313a',
-    borderRadius: 25,
+    height: 40,
+    backgroundColor: '#0ca5e5',
+    borderRadius: 20,
     marginVertical: 10,
-    paddingVertical: 13
+    paddingVertical: 13,
+    justifyContent: 'center'
   },
   buttonText: {
     fontSize: 20,

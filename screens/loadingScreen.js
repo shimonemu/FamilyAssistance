@@ -1,17 +1,13 @@
 import React, { Component } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
-  TouchableOpacity,
   Keyboard,
   TouchableWithoutFeedback
 } from 'react-native';
 import firebase from '../config/config';
 import Logo from '../src/components/Logo';
 import Spinner from '../src/components/Spinner';
-
-import { Actions } from 'react-native-router-flux';
 
 export default class Login extends Component {
 
@@ -27,10 +23,18 @@ export default class Login extends Component {
     var that = this;
     firebase.auth().onAuthStateChanged(function (user) {
       try {
+        let sessionTimeout;
         user = firebase.auth().currentUser;
         if (user) {
+          user.getIdTokenResult().then((idTokenResult) => {
+            const authTime = idTokenResult.claims.auth_time * 1000;
+            console.log('authTime: ', authTime);
+            const sessionDuration = 1000 * 60 * 100;
+            const millisecondsUntilExpiration = sessionDuration - (Date.now() - authTime);
+            sessionTimeout = setTimeout(() => firebase.auth().signOut(), millisecondsUntilExpiration)
+          })
           let userUid = user.uid;
-          console.log(userUid)
+          console.log('userUid: ', userUid)
           firebase.firestore().collection('users').doc(userUid).get()
             .then(doc => {
               console.log('loading')
@@ -38,45 +42,36 @@ export default class Login extends Component {
               if (role == 'sw') {
                 that.props.navigation.navigate('SwDashboard');
               }
-              else if (role == 'parent') {
+              else if (role == 'parent' || role == 'kid') {
                 that.props.navigation.navigate('ParentsDashboard');
               }
-              else if (role == 'child') {
-                that.props.navigation.navigate('KidsDashboard');
+              // else if (role == 'kid') {
+              //   that.props.navigation.navigate('KidsDashboard');
+              // }
+              else if (role == 'admin') {
+                console.log('1111')
+                that.props.navigation.navigate('adminDashboard');
               } else {
+                console.log('2222')
                 that.props.navigation.navigate('Welcome');
               }
             })
+            .catch((err) => {
+              console.log('loading', err);
+              that.props.navigation.navigate('Welcome');
+            })
         } else {
+          sessionTimeout && clearTimeout(sessionTimeout);
+          sessionTimeout = null;
           that.props.navigation.navigate('Welcome');
         }
-        // if (userUid) {
-        //   that.props.navigation.navigate('SwDashboard');
-        // } else {
-        // }
       } catch {
         console.log('error get current user 2');
+        that.props.navigation.navigate('Welcome');
       }
-      // user = firebase.auth().currentUser;
-      // //console.log('Loading   '+user);
-      // console.log('loading');
-      // if (user) {
-      //   that.props.navigation.navigate('SwDashboard');
-      // } else {
-      //   that.props.navigation.navigate('Welcome');
-      // }
+
     })
 
-    // firebase.auth().onAuthStateChanged(function(user) {
-    //   if(user){
-    //     that.setState({ loggedIn:true });
-    //     that.props.navigation.navigate('ParentsDashboard');
-    //     //this.navigation.navigate('SwDashboard');
-    //   }else{
-    //     that.setState({ loggedIn: false });
-    //     that.props.navigation.navigate('Welcome');
-    //   }
-    // });
   }
 
   render() {
@@ -85,7 +80,6 @@ export default class Login extends Component {
         <View style={styles.container}>
           <Logo />
           <Spinner />
-
         </View>
       </TouchableWithoutFeedback>
     )
@@ -95,7 +89,7 @@ export default class Login extends Component {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#8b96d9',
+    backgroundColor: '#fbc213',
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center'

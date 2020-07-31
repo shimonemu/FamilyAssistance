@@ -1,25 +1,32 @@
 import React, { Component } from 'react';
 import RNPickerSelect from 'react-native-picker-select';
- 
- const Dropdown = () => {
+
+const Dropdown = (props) => {
 
     const pickerStyle = {
         inputIOS: {
+            fontWeight:'bold',
             color: 'white',
             paddingTop: 13,
             paddingHorizontal: 10,
             paddingBottom: 12,
+            borderWidth: 1,
+            borderColor: 'black',
+            alignItems:'flex-end'
         },
         inputAndroid: {
-            color: 'brown',
-            fontsize:20,
+            color: 'white',
+            fontWeight:'bold',
+            fontsize: 20,
             borderRadius: 8,
             borderWidth: 0.5,
-            borderColor: 'purple',
+            borderColor: 'black',
+            alignItems:'flex-end'
+
 
         },
-        placeholderColor: 'red',
-        underline: { borderTopWidth: 0 },
+        
+        underline: { borderTopWidth: 1 },
         icon: {
             position: 'absolute',
             backgroundColor: 'transparent',
@@ -29,23 +36,32 @@ import RNPickerSelect from 'react-native-picker-select';
             borderRightColor: 'transparent',
             borderLeftWidth: 5,
             borderLeftColor: 'transparent',
-            width: 0,
+            width: 30,
             height: 0,
             top: 20,
             right: 15,
         },
+        
+
     };
     return (
         <RNPickerSelect
-            onValueChange={(value) => console.log(value)}
-            items={[
-                { label: 'משפחת כהן', value: 'kfir' },
-                { label: 'משפחת לוי', value: 'noa' },
-                { label: 'משפחת אהרונוביץ', value: 'shimon' },
-            ]}
+
+            // onValueChange={(value) => console.log(value)}
+            onValueChange={(value) => props.familySelected(value)}
+            items={props.families}
+            // items={[
+            //     { label: 'משפחת כהן', value: 'kfir' },
+            //     { label: 'משפחת לוי', value: 'noa' },
+            //     { label: 'משפחת אהרונוביץ', value: 'shimon' },
+            // ]}
+
             InputAccessoryView={() => null}
+            placeholder={{ label: 'בחר משפחה... ', value: null, color: 'lightgray' }}
+            placeholderTextColor='white'
+            
             style={pickerStyle}
-            // value={this.state.favSport2}
+        // value={this.state.favSport2}
         />
     );
 };
